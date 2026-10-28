@@ -55,6 +55,7 @@ namespace Files.App.Services.Settings
 		{
 			_settings = settings;
 
+			var isFirstRun = false;
 			if (settings.LayoutTemplates is { Count: > 0 } templates)
 			{
 				_templates = templates.Exists(template => template.Id == LayoutTemplateIds.Default)
@@ -68,9 +69,12 @@ namespace Files.App.Services.Settings
 				_rules = MigrateLegacySettings();
 				settings.LayoutTemplates = [.. _templates];
 				settings.LayoutRules = [.. _rules];
+				isFirstRun = true;
 			}
 
 			_dispatcherQueue = DispatcherQueue.GetForCurrentThread();
+			if (isFirstRun)
+				_dispatcherQueue?.TryEnqueue(() => AssignBuiltInTemplates());
 			Ioc.Default.GetRequiredService<IUserSettingsService>().OnSettingChangedEvent += UserSettingsService_OnSettingChangedEvent;
 		}
 
@@ -291,24 +295,42 @@ namespace Files.App.Services.Settings
 
 		private static LayoutRule[] CreateBuiltInRules(bool includeMediaRules)
 		{
-			LayoutRule[] rules =
+			return includeMediaRules
+				?
+				[
+					new() { Kind = LayoutRuleKind.FileTypes, Extensions = PictureAndVideoExtensions, TemplateId = LayoutTemplateIds.PicturesAndVideos },
+					new() { Kind = LayoutRuleKind.FileTypes, Extensions = MusicExtensions, TemplateId = LayoutTemplateIds.Music },
+				]
+				: [];
+		}
+
+		/// <summary>
+		/// Makes the matching locations use the built-in templates, as if the user chose them, unless they have their own layout.
+		/// </summary>
+		private void AssignBuiltInTemplates()
+		{
+			(string Path, string TemplateId)[] locations =
 			[
-				new() { Kind = LayoutRuleKind.Folder, Path = LayoutKnownFolders.Downloads, TemplateId = LayoutTemplateIds.GroupedByDate },
-				new() { Kind = LayoutRuleKind.RecycleBin, TemplateId = LayoutTemplateIds.RecycleBin },
+				(Constants.UserEnvironmentPaths.RecycleBinPath, LayoutTemplateIds.RecycleBin),
+				(LayoutKnownFolders.GetPath(LayoutKnownFolders.Downloads), LayoutTemplateIds.GroupedByDate),
+				(LayoutKnownFolders.GetPath(LayoutKnownFolders.Pictures), LayoutTemplateIds.PicturesAndVideos),
+				(LayoutKnownFolders.GetPath(LayoutKnownFolders.Videos), LayoutTemplateIds.PicturesAndVideos),
 			];
 
-			if (!includeMediaRules)
-				return rules;
+			var database = LayoutPreferencesManager.GetDatabaseManagerInstance();
+			foreach (var (path, templateId) in locations)
+			{
+				SafetyExtensions.IgnoreExceptions(() =>
+				{
+					var trimmedPath = path.TrimPath();
+					if (string.IsNullOrEmpty(trimmedPath) || GetTemplate(templateId) is not { } template)
+						return;
 
-			return
-			[
-				.. rules,
-				new() { Kind = LayoutRuleKind.Folder, Path = LayoutKnownFolders.Pictures, IncludeSubfolders = true, TemplateId = LayoutTemplateIds.PicturesAndVideos },
-				new() { Kind = LayoutRuleKind.Folder, Path = LayoutKnownFolders.Music, IncludeSubfolders = true, TemplateId = LayoutTemplateIds.Music },
-				new() { Kind = LayoutRuleKind.Folder, Path = LayoutKnownFolders.Videos, IncludeSubfolders = true, TemplateId = LayoutTemplateIds.PicturesAndVideos },
-				new() { Kind = LayoutRuleKind.FileTypes, Extensions = PictureAndVideoExtensions, TemplateId = LayoutTemplateIds.PicturesAndVideos },
-				new() { Kind = LayoutRuleKind.FileTypes, Extensions = MusicExtensions, TemplateId = LayoutTemplateIds.Music },
-			];
+					var folderFRN = Win32Helper.GetFolderFRN(trimmedPath);
+					if (database.GetPreferences(trimmedPath, folderFRN) is null)
+						database.SetPreferences(trimmedPath, folderFRN, LayoutPreferencesItem.FromTemplate(template));
+				}, App.Logger);
+			}
 		}
 	}
 }

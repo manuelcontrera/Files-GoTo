@@ -299,15 +299,56 @@ namespace Files.App.Helpers
 		}
 
 		/// <summary>
-		/// Saves the current columns to the layout template of the folder.
+		/// Saves the preferences of the specified folder as a new template, and makes the folder use it.
 		/// </summary>
-		public void SaveColumnsToTemplate()
+		public static LayoutTemplate? SaveAsNewTemplateFromPath(string path, string name)
 		{
-			if (LayoutTemplatesService.GetTemplate(TemplateId)?.Clone() is not { } template)
+			if (GetLayoutPreferences(path) is not { } preferences)
+				return null;
+
+			var template = (LayoutTemplatesService.GetTemplate(preferences.TemplateId) ?? LayoutTemplatesService.DefaultTemplate).Clone();
+			preferences.SaveToTemplate(template);
+
+			var newTemplate = LayoutTemplatesService.AddTemplate(template, name);
+			SetTemplateForPath(path, newTemplate.Id);
+			return newTemplate;
+		}
+
+		/// <summary>
+		/// Gets the preferences the specified folder uses.
+		/// </summary>
+		public static LayoutPreferencesItem? GetLayoutPreferences(string? path)
+			=> GetLayoutPreferencesForPath(path, () => FolderContentHelpers.ReadContent(path));
+
+		/// <summary>
+		/// Makes the specified folder use the specified template, discarding its own preferences.
+		/// </summary>
+		/// <remarks>
+		/// The folder keeps the template from then on, even when its file types match another template.
+		/// </remarks>
+		public static void SetTemplateForPath(string path, string templateId)
+		{
+			var trimmedPath = path.TrimPath();
+			if (string.IsNullOrEmpty(trimmedPath))
 				return;
 
-			DetailsLayoutColumnDefaults.Save(ColumnsViewModel, template);
-			LayoutTemplatesService.SaveTemplate(template);
+			SafetyExtensions.IgnoreExceptions(() =>
+			{
+				var folderFRN = Win32Helper.GetFolderFRN(trimmedPath);
+				GetDatabaseManagerInstance().SetPreferences(trimmedPath, folderFRN, new LayoutPreferencesItem() { TemplateId = templateId, FollowsTemplate = true });
+			}, App.Logger);
+		}
+
+		/// <summary>
+		/// Removes the saved preferences of the specified folder, so it uses the default layout again.
+		/// </summary>
+		public static void ResetPreferencesForPath(string path)
+		{
+			var trimmedPath = path.TrimPath();
+			if (string.IsNullOrEmpty(trimmedPath))
+				return;
+
+			SafetyExtensions.IgnoreExceptions(() => GetDatabaseManagerInstance().SetPreferences(trimmedPath, Win32Helper.GetFolderFRN(trimmedPath), null), App.Logger);
 		}
 
 		public void ToggleLayoutModeColumnView()
@@ -367,6 +408,15 @@ namespace Files.App.Helpers
 			{
 				_isApplyingPreferences = false;
 			}
+		}
+
+		/// <summary>
+		/// Makes the folder keep its current preferences without following its template.
+		/// </summary>
+		public void DetachFromTemplate()
+		{
+			if (LayoutPreferencesItem.FollowsTemplate)
+				RequestSave();
 		}
 
 		private void RequestSave()

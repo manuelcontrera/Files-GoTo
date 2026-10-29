@@ -14,6 +14,7 @@ using WinRT;
 using DispatcherQueue = Microsoft.UI.Dispatching.DispatcherQueue;
 using DispatcherQueueTimer = Microsoft.UI.Dispatching.DispatcherQueueTimer;
 using FlyoutPlacementMode = Microsoft.UI.Xaml.Controls.Primitives.FlyoutPlacementMode;
+using ThemedIconColorType = Files.App.Controls.ThemedIconColorType;
 
 namespace Files.App.UserControls
 {
@@ -636,7 +637,24 @@ namespace Files.App.UserControls
 		}
 
 		private void LayoutButton_Click(object sender, RoutedEventArgs e)
-			=> LayoutFlyout?.Hide();
+		{
+			LayoutFlyout?.Hide();
+
+			if (sender is RadioButton button)
+				DispatcherQueue.TryEnqueue(() => button.IsChecked = ViewModel?.IsLayoutTemplateApplied is false);
+		}
+
+		private bool IsLayoutToggled(bool isLayout, bool isTemplateApplied)
+			=> isLayout && !isTemplateApplied;
+
+		private bool IsTemplateLayout(bool isLayout, bool isTemplateApplied)
+			=> isLayout && isTemplateApplied;
+
+		private ThemedIconColorType GetLayoutIconColor(bool isLayout, bool isTemplateApplied)
+			=> IsTemplateLayout(isLayout, isTemplateApplied) ? ThemedIconColorType.Accent : ThemedIconColorType.Normal;
+
+		private Style? GetLayoutLabelStyle(bool isLayout, bool isTemplateApplied)
+			=> IsTemplateLayout(isLayout, isTemplateApplied) ? (Style)Resources["Local.TemplateLayoutLabelStyle"] : null;
 
 		private void CustomizeToolbar_Click(object sender, RoutedEventArgs e)
 			=> Commands.CustomizeToolbar.Execute(null);

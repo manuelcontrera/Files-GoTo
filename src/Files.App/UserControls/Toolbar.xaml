@@ -7,6 +7,7 @@
 	xmlns:controls="using:Files.App.Controls"
 	xmlns:converters="using:Files.App.Converters"
 	xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+	xmlns:dataitems="using:Files.App.Data.Items"
 	xmlns:helpers="using:Files.App.Helpers"
 	xmlns:local="using:Files.App.UserControls"
 	xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -50,6 +51,10 @@
 				<Setter Target="Width" Value="76" />
 				<Setter Target="Height" Value="72" />
 				<Setter Target="MinWidth" Value="0" />
+			</Style>
+
+			<Style x:Key="Local.TemplateLayoutLabelStyle" TargetType="TextBlock">
+				<Setter Property="Foreground" Value="{ThemeResource AccentTextFillColorPrimaryBrush}" />
 			</Style>
 		</ResourceDictionary>
 	</UserControl.Resources>
@@ -278,13 +283,55 @@
 				<controls:ThemedIcon Style="{x:Bind ViewModel.LayoutThemedIcon, Mode=OneWay}" />
 
 				<AppBarButton.Flyout>
-					<Flyout
-						x:Name="LayoutFlyout"
-						contract8Present:ShouldConstrainToRootBounds="False"
-						Placement="Bottom">
+					<Flyout x:Name="LayoutFlyout" Placement="Bottom">
 						<StackPanel Spacing="12">
 
-							<!--  Header  -->
+							<!--  Template Header  -->
+							<TextBlock FontWeight="Medium" Text="{helpers:ResourceString Name=ApplyLayoutTemplate}" />
+
+							<!--  Templates  -->
+							<ComboBox
+								HorizontalAlignment="Stretch"
+								AllowFocusOnInteraction="True"
+								AutomationProperties.Name="{helpers:ResourceString Name=ApplyLayoutTemplate}"
+								ItemsSource="{x:Bind ViewModel.LayoutTemplates, Mode=OneWay}"
+								SelectedItem="{x:Bind ViewModel.SelectedLayoutTemplate, Mode=TwoWay}">
+								<ComboBox.ItemTemplate>
+									<DataTemplate x:DataType="dataitems:LayoutTemplate">
+										<TextBlock Text="{x:Bind DisplayName}" TextTrimming="CharacterEllipsis" />
+									</DataTemplate>
+								</ComboBox.ItemTemplate>
+							</ComboBox>
+
+							<!--  Template Actions  -->
+							<Grid ColumnSpacing="8">
+								<Grid.ColumnDefinitions>
+									<ColumnDefinition Width="*" />
+									<ColumnDefinition Width="*" />
+								</Grid.ColumnDefinitions>
+
+								<!--  Edit Template  -->
+								<Button
+									HorizontalAlignment="Stretch"
+									Command="{x:Bind ViewModel.EditLayoutTemplateCommand}"
+									Content="{helpers:ResourceString Name=EditTemplate}" />
+
+								<!--  Save Layout As Template  -->
+								<Button
+									Grid.Column="1"
+									HorizontalAlignment="Stretch"
+									Command="{x:Bind ViewModel.SaveAsNewLayoutTemplateCommand}"
+									Content="{helpers:ResourceString Name=SaveLayoutAsTemplate}" />
+							</Grid>
+
+							<!--  (Divider)  -->
+							<Border
+								Margin="-20,0"
+								HorizontalAlignment="Stretch"
+								BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+								BorderThickness=".5" />
+
+							<!--  Layout Header  -->
 							<TextBlock FontWeight="Medium" Text="{helpers:ResourceString Name=Layout}" />
 
 							<!--  Layout  -->
@@ -296,18 +343,21 @@
 									Click="LayoutButton_Click"
 									Command="{x:Bind Commands.LayoutDetails}"
 									GroupName="LayoutRadio"
-									IsChecked="{x:Bind ViewModel.IsDetailsLayout, Mode=OneWay}"
+									IsChecked="{x:Bind IsLayoutToggled(ViewModel.IsDetailsLayout, ViewModel.IsLayoutTemplateApplied), Mode=OneWay}"
 									Style="{StaticResource Local.RadioToggleButtonStyle}"
 									ToolTipService.ToolTip="{x:Bind Commands.LayoutDetails.LabelWithHotKey, Mode=OneWay}">
 									<StackPanel Spacing="4">
 										<controls:ThemedIcon
 											Width="28"
 											Height="28"
+											IconColorType="{x:Bind GetLayoutIconColor(ViewModel.IsDetailsLayout, ViewModel.IsLayoutTemplateApplied), Mode=OneWay}"
+											IsFilled="{x:Bind IsTemplateLayout(ViewModel.IsDetailsLayout, ViewModel.IsLayoutTemplateApplied), Mode=OneWay}"
 											Style="{StaticResource App.ThemedIcons.IconLayout.Details.28}" />
 
 										<TextBlock
 											HorizontalAlignment="Center"
 											FontSize="12"
+											Style="{x:Bind GetLayoutLabelStyle(ViewModel.IsDetailsLayout, ViewModel.IsLayoutTemplateApplied), Mode=OneWay}"
 											Text="{x:Bind Commands.LayoutDetails.Label}"
 											TextTrimming="CharacterEllipsis"
 											TextWrapping="NoWrap" />
@@ -320,7 +370,7 @@
 									Click="LayoutButton_Click"
 									Command="{x:Bind Commands.LayoutList}"
 									GroupName="LayoutRadio"
-									IsChecked="{x:Bind ViewModel.IsListLayout, Mode=OneWay}"
+									IsChecked="{x:Bind IsLayoutToggled(ViewModel.IsListLayout, ViewModel.IsLayoutTemplateApplied), Mode=OneWay}"
 									Style="{StaticResource Local.RadioToggleButtonStyle}"
 									ToolTipService.ToolTip="{x:Bind Commands.LayoutList.LabelWithHotKey, Mode=OneWay}">
 
@@ -328,11 +378,14 @@
 										<controls:ThemedIcon
 											Width="28"
 											Height="28"
+											IconColorType="{x:Bind GetLayoutIconColor(ViewModel.IsListLayout, ViewModel.IsLayoutTemplateApplied), Mode=OneWay}"
+											IsFilled="{x:Bind IsTemplateLayout(ViewModel.IsListLayout, ViewModel.IsLayoutTemplateApplied), Mode=OneWay}"
 											Style="{StaticResource App.ThemedIcons.IconLayout.List.28}" />
 
 										<TextBlock
 											HorizontalAlignment="Center"
 											FontSize="12"
+											Style="{x:Bind GetLayoutLabelStyle(ViewModel.IsListLayout, ViewModel.IsLayoutTemplateApplied), Mode=OneWay}"
 											Text="{x:Bind Commands.LayoutList.Label}"
 											TextTrimming="CharacterEllipsis"
 											TextWrapping="NoWrap" />
@@ -345,7 +398,7 @@
 									Click="LayoutButton_Click"
 									Command="{x:Bind Commands.LayoutCards}"
 									GroupName="LayoutRadio"
-									IsChecked="{x:Bind ViewModel.IsCardsLayout, Mode=OneWay}"
+									IsChecked="{x:Bind IsLayoutToggled(ViewModel.IsCardsLayout, ViewModel.IsLayoutTemplateApplied), Mode=OneWay}"
 									Style="{StaticResource Local.RadioToggleButtonStyle}"
 									ToolTipService.ToolTip="{x:Bind Commands.LayoutCards.LabelWithHotKey, Mode=OneWay}">
 
@@ -353,11 +406,14 @@
 										<controls:ThemedIcon
 											Width="28"
 											Height="28"
+											IconColorType="{x:Bind GetLayoutIconColor(ViewModel.IsCardsLayout, ViewModel.IsLayoutTemplateApplied), Mode=OneWay}"
+											IsFilled="{x:Bind IsTemplateLayout(ViewModel.IsCardsLayout, ViewModel.IsLayoutTemplateApplied), Mode=OneWay}"
 											Style="{StaticResource App.ThemedIcons.IconLayout.Tiles.28}" />
 
 										<TextBlock
 											HorizontalAlignment="Center"
 											FontSize="12"
+											Style="{x:Bind GetLayoutLabelStyle(ViewModel.IsCardsLayout, ViewModel.IsLayoutTemplateApplied), Mode=OneWay}"
 											Text="{x:Bind Commands.LayoutCards.Label}"
 											TextTrimming="CharacterEllipsis"
 											TextWrapping="NoWrap" />
@@ -370,7 +426,7 @@
 									Click="LayoutButton_Click"
 									Command="{x:Bind Commands.LayoutGrid}"
 									GroupName="LayoutRadio"
-									IsChecked="{x:Bind ViewModel.IsGridLayout, Mode=OneWay}"
+									IsChecked="{x:Bind IsLayoutToggled(ViewModel.IsGridLayout, ViewModel.IsLayoutTemplateApplied), Mode=OneWay}"
 									Style="{StaticResource Local.RadioToggleButtonStyle}"
 									ToolTipService.ToolTip="{x:Bind Commands.LayoutGrid.LabelWithHotKey, Mode=OneWay}">
 
@@ -378,11 +434,14 @@
 										<controls:ThemedIcon
 											Width="28"
 											Height="28"
+											IconColorType="{x:Bind GetLayoutIconColor(ViewModel.IsGridLayout, ViewModel.IsLayoutTemplateApplied), Mode=OneWay}"
+											IsFilled="{x:Bind IsTemplateLayout(ViewModel.IsGridLayout, ViewModel.IsLayoutTemplateApplied), Mode=OneWay}"
 											Style="{StaticResource App.ThemedIcons.IconLayout.Grid.28}" />
 
 										<TextBlock
 											HorizontalAlignment="Center"
 											FontSize="12"
+											Style="{x:Bind GetLayoutLabelStyle(ViewModel.IsGridLayout, ViewModel.IsLayoutTemplateApplied), Mode=OneWay}"
 											Text="{x:Bind Commands.LayoutGrid.Label}"
 											TextTrimming="CharacterEllipsis"
 											TextWrapping="NoWrap" />
@@ -395,7 +454,7 @@
 									Click="LayoutButton_Click"
 									Command="{x:Bind Commands.LayoutColumns}"
 									GroupName="LayoutRadio"
-									IsChecked="{x:Bind ViewModel.IsColumnLayout, Mode=OneWay}"
+									IsChecked="{x:Bind IsLayoutToggled(ViewModel.IsColumnLayout, ViewModel.IsLayoutTemplateApplied), Mode=OneWay}"
 									Style="{StaticResource Local.RadioToggleButtonStyle}"
 									ToolTipService.ToolTip="{x:Bind Commands.LayoutColumns.LabelWithHotKey, Mode=OneWay}">
 
@@ -403,11 +462,14 @@
 										<controls:ThemedIcon
 											Width="28"
 											Height="28"
+											IconColorType="{x:Bind GetLayoutIconColor(ViewModel.IsColumnLayout, ViewModel.IsLayoutTemplateApplied), Mode=OneWay}"
+											IsFilled="{x:Bind IsTemplateLayout(ViewModel.IsColumnLayout, ViewModel.IsLayoutTemplateApplied), Mode=OneWay}"
 											Style="{StaticResource App.ThemedIcons.IconLayout.Columns.28}" />
 
 										<TextBlock
 											HorizontalAlignment="Center"
 											FontSize="12"
+											Style="{x:Bind GetLayoutLabelStyle(ViewModel.IsColumnLayout, ViewModel.IsLayoutTemplateApplied), Mode=OneWay}"
 											Text="{x:Bind Commands.LayoutColumns.Label}"
 											TextTrimming="CharacterEllipsis"
 											TextWrapping="NoWrap" />
@@ -764,6 +826,27 @@
 								HorizontalAlignment="Stretch"
 								BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
 								BorderThickness=".5" />
+
+							<!--  Restore Default View  -->
+							<StackPanel Spacing="12" Visibility="{x:Bind ViewModel.IsLayoutCustomized, Mode=OneWay}">
+								<Grid ColumnSpacing="8">
+									<Grid.ColumnDefinitions>
+										<ColumnDefinition Width="*" />
+										<ColumnDefinition Width="*" />
+									</Grid.ColumnDefinitions>
+									<Button
+										HorizontalAlignment="Stretch"
+										Command="{x:Bind ViewModel.RestoreDefaultViewCommand}"
+										Content="{helpers:ResourceString Name=RestoreDefaultView}" />
+								</Grid>
+
+								<!--  (Divider)  -->
+								<Border
+									Margin="-20,0"
+									HorizontalAlignment="Stretch"
+									BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+									BorderThickness=".5" />
+							</StackPanel>
 
 							<!--  Toggle Options  -->
 							<Grid RowSpacing="4">

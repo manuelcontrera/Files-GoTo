@@ -37,6 +37,7 @@ namespace Files.App.ViewModels.UserControls
 		private readonly IUpdateService UpdateService = Ioc.Default.GetRequiredService<IUpdateService>();
 		private readonly ICommandManager Commands = Ioc.Default.GetRequiredService<ICommandManager>();
 		private readonly IContentPageContext ContentPageContext = Ioc.Default.GetRequiredService<IContentPageContext>();
+		private readonly ILayoutTemplatesService LayoutTemplatesService = Ioc.Default.GetRequiredService<ILayoutTemplatesService>();
 		private readonly StatusCenterViewModel OngoingTasksViewModel = Ioc.Default.GetRequiredService<StatusCenterViewModel>();
 
 		// Fields
@@ -265,6 +266,7 @@ namespace Files.App.ViewModels.UserControls
 				if (SetProperty(ref _InstanceViewModel, value) && value is not null)
 				{
 					FolderSettings_PropertyChanged(this, new PropertyChangedEventArgs(nameof(LayoutPreferencesManager.LayoutMode)));
+					UpdateLayoutTemplateProperties();
 					value.FolderSettings.PropertyChanged += FolderSettings_PropertyChanged;
 					value.PropertyChanged += InstanceViewModel_PropertyChanged;
 					OnPropertyChanged(nameof(OmnibarSearchModePlaceholder));
@@ -311,6 +313,41 @@ namespace Files.App.ViewModels.UserControls
 		public ICommand? Share { get; set; }
 		public ICommand? UpdateCommand { get; set; }
 
+		private static readonly LayoutTemplate NoLayoutTemplate = new() { Name = Strings.NoTemplateSelected.GetLocalizedResource() };
+
+		public List<LayoutTemplate> LayoutTemplates
+			=> [NoLayoutTemplate, .. LayoutTemplatesService.Templates.Where(template => template.Id != LayoutTemplateIds.Default)];
+
+		/// <summary>
+		/// Gets or sets the template the current folder uses, or the "No template selected" choice when it uses the default layout or has its own changes.
+		/// </summary>
+		public LayoutTemplate SelectedLayoutTemplate
+		{
+			get => _InstanceViewModel?.FolderSettings is { IsCustomized: false, TemplateId: { } id } && id != LayoutTemplateIds.Default ? LayoutTemplatesService.GetTemplate(id) ?? NoLayoutTemplate : NoLayoutTemplate;
+			set
+			{
+				if (value is null || value.Id == SelectedLayoutTemplate.Id)
+					return;
+
+				if (value == NoLayoutTemplate)
+					_InstanceViewModel?.FolderSettings.DetachFromTemplate();
+				else
+					RunLayoutTemplateAction(path => LayoutPreferencesManager.SetTemplateForPath(path, value.Id));
+			}
+		}
+
+		public bool IsLayoutTemplateApplied
+			=> SelectedLayoutTemplate != NoLayoutTemplate;
+
+		public bool IsLayoutCustomized
+			=> _InstanceViewModel?.FolderSettings.IsCustomized ?? false;
+
+		public IRelayCommand SaveAsNewLayoutTemplateCommand { get; }
+
+		public IAsyncRelayCommand EditLayoutTemplateCommand { get; }
+
+		public IRelayCommand RestoreDefaultViewCommand { get; }
+
 		// Constructor
 
 		public NavigationToolbarViewModel()
@@ -318,6 +355,11 @@ namespace Files.App.ViewModels.UserControls
 			_dispatcherQueue = DispatcherQueue.GetForCurrentThread();
 			UserSettingsService.OnSettingChangedEvent += UserSettingsService_OnSettingChangedEvent;
 			UpdateService.PropertyChanged += UpdateService_OnPropertyChanged;
+			LayoutTemplatesService.PropertyChanged += LayoutTemplatesService_PropertyChanged;
+
+			SaveAsNewLayoutTemplateCommand = new RelayCommand(SaveAsNewLayoutTemplate);
+			EditLayoutTemplateCommand = new AsyncRelayCommand(() => Commands.OpenSettings.ExecuteAsync(new SettingsNavigationParams() { PageKind = SettingsPageKind.LayoutPage }), () => IsLayoutTemplateApplied);
+			RestoreDefaultViewCommand = new RelayCommand(() => RunLayoutTemplateAction(LayoutPreferencesManager.ResetPreferencesForPath));
 
 			Commands.DecompressArchive.PropertyChanged += DecompressCommand_PropertyChanged;
 			Commands.DecompressArchiveHere.PropertyChanged += DecompressCommand_PropertyChanged;
@@ -1370,7 +1412,44 @@ namespace Files.App.ViewModels.UserControls
 					OnPropertyChanged(nameof(IsLayoutSizeLarge));
 					OnPropertyChanged(nameof(IsLayoutSizeExtraLarge));
 					break;
+				case nameof(LayoutPreferencesManager.TemplateId):
+				case nameof(LayoutPreferencesManager.IsCustomized):
+					UpdateLayoutTemplateProperties();
+					break;
 			}
+		}
+
+		private void LayoutTemplatesService_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+		{
+			if (e.PropertyName is nameof(ILayoutTemplatesService.Templates))
+			{
+				OnPropertyChanged(nameof(LayoutTemplates));
+				UpdateLayoutTemplateProperties();
+			}
+		}
+
+		private void UpdateLayoutTemplateProperties()
+		{
+			OnPropertyChanged(nameof(SelectedLayoutTemplate));
+			OnPropertyChanged(nameof(IsLayoutTemplateApplied));
+			EditLayoutTemplateCommand.NotifyCanExecuteChanged();
+			OnPropertyChanged(nameof(IsLayoutCustomized));
+		}
+
+		private void SaveAsNewLayoutTemplate()
+		{
+			var name = ContentPageContext.ShellPage?.ShellViewModel?.CurrentFolder?.Name;
+			RunLayoutTemplateAction(path => LayoutPreferencesManager.SaveAsNewTemplateFromPath(path, string.IsNullOrEmpty(name) ? Strings.NewTemplate.GetLocalizedResource() : name));
+		}
+
+		private void RunLayoutTemplateAction(Action<string> action)
+		{
+			if (ContentPageContext.ShellPage is not { ShellViewModel: { WorkingDirectory: { Length: > 0 } path } shellViewModel } shellPage)
+				return;
+
+			action(path);
+			shellPage.InstanceViewModel.FolderSettings.ReloadPreferences(path, () => FolderContentHelpers.GetContent(shellViewModel.FilesAndFolders.ToList()));
+			LayoutHelpers.ReloadPreferences(path);
 		}
 
 		public void CancelSuggestionSearch()
@@ -1394,6 +1473,7 @@ namespace Files.App.ViewModels.UserControls
 			InstanceViewModel = null!;
 			SelectedItems = null;
 			UserSettingsService.OnSettingChangedEvent -= UserSettingsService_OnSettingChangedEvent;
+			LayoutTemplatesService.PropertyChanged -= LayoutTemplatesService_PropertyChanged;
 			UpdateService.PropertyChanged -= UpdateService_OnPropertyChanged;
 			Commands.DecompressArchive.PropertyChanged -= DecompressCommand_PropertyChanged;
 			Commands.DecompressArchiveHere.PropertyChanged -= DecompressCommand_PropertyChanged;

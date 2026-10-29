@@ -358,7 +358,7 @@ namespace Files.App.ViewModels.UserControls
 			LayoutTemplatesService.PropertyChanged += LayoutTemplatesService_PropertyChanged;
 
 			SaveAsNewLayoutTemplateCommand = new RelayCommand(SaveAsNewLayoutTemplate);
-			EditLayoutTemplateCommand = new AsyncRelayCommand(() => Commands.OpenSettings.ExecuteAsync(new SettingsNavigationParams() { PageKind = SettingsPageKind.LayoutPage }), () => IsLayoutTemplateApplied);
+			EditLayoutTemplateCommand = new AsyncRelayCommand(() => EditLayoutTemplateAsync(SelectedLayoutTemplate.Id), () => IsLayoutTemplateApplied);
 			RestoreDefaultViewCommand = new RelayCommand(() => RunLayoutTemplateAction(LayoutPreferencesManager.ResetPreferencesForPath));
 
 			Commands.DecompressArchive.PropertyChanged += DecompressCommand_PropertyChanged;
@@ -1439,7 +1439,16 @@ namespace Files.App.ViewModels.UserControls
 		private void SaveAsNewLayoutTemplate()
 		{
 			var name = ContentPageContext.ShellPage?.ShellViewModel?.CurrentFolder?.Name;
-			RunLayoutTemplateAction(path => LayoutPreferencesManager.SaveAsNewTemplateFromPath(path, string.IsNullOrEmpty(name) ? Strings.NewTemplate.GetLocalizedResource() : name));
+			LayoutTemplate? template = null;
+			RunLayoutTemplateAction(path => template = LayoutPreferencesManager.SaveAsNewTemplateFromPath(path, string.IsNullOrEmpty(name) ? Strings.NewTemplate.GetLocalizedResource() : name));
+			_ = EditLayoutTemplateAsync(template?.Id);
+		}
+
+		private Task EditLayoutTemplateAsync(string? id)
+		{
+			return id is null
+				? Task.CompletedTask
+				: Commands.OpenSettings.ExecuteAsync(new SettingsNavigationParams() { PageKind = SettingsPageKind.LayoutPage, LayoutTemplateId = id });
 		}
 
 		private void RunLayoutTemplateAction(Action<string> action)

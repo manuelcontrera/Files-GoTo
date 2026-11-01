@@ -3,10 +3,11 @@
 
 using System;
 using System.Text.Json.Serialization;
+using Files.App.Controls;
 
 namespace Files.App.Data.Models
 {
-	public sealed class VisitedFolderItem
+	public sealed class VisitedFolderItem : IOmnibarTextMemberPathProvider
 	{
 		[JsonPropertyName("path")]
 		public string FolderPath { get; set; } = string.Empty;
@@ -39,6 +40,16 @@ namespace Files.App.Data.Models
 			};
 
 			return count * weight;
+		}
+
+		public string? GetTextMemberPath(string textMemberPath)
+		{
+			return textMemberPath switch
+			{
+				nameof(FolderPath) => FolderPath,
+				nameof(FolderName) => FolderName,
+				_ => FolderPath
+			};
 		}
 	}
 }

@@ -37,7 +37,10 @@ namespace Files.App.Services
 		public async Task InitializeAsync()
 		{
 			if (!File.Exists(_storagePath))
+			{
+				EnsureDefaultFoldersSeeded();
 				return;
+			}
 
 			await _fileLock.WaitAsync();
 			try
@@ -60,6 +63,32 @@ namespace Files.App.Services
 			finally
 			{
 				_fileLock.Release();
+			}
+
+			EnsureDefaultFoldersSeeded();
+		}
+
+		private void EnsureDefaultFoldersSeeded()
+		{
+			if (!_cache.IsEmpty)
+				return;
+
+			var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+			string[] defaultPaths =
+			[
+				Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
+				!string.IsNullOrWhiteSpace(userProfile) ? Path.Combine(userProfile, "Downloads") : string.Empty,
+				Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+				Environment.GetFolderPath(Environment.SpecialFolder.MyPictures),
+				Environment.GetFolderPath(Environment.SpecialFolder.MyVideos),
+				Environment.GetFolderPath(Environment.SpecialFolder.MyMusic),
+				userProfile
+			];
+
+			foreach (var defaultPath in defaultPaths)
+			{
+				if (!string.IsNullOrWhiteSpace(defaultPath) && Directory.Exists(defaultPath))
+					TrackFolder(defaultPath);
 			}
 		}
 
@@ -110,17 +139,20 @@ namespace Files.App.Services
 
 		public IReadOnlyList<VisitedFolderItem> GetTopFolders(int limit = 15)
 		{
+			EnsureDefaultFoldersSeeded();
+
 			return _cache.Values
 				.OrderByDescending(f => f.FrecencyScore)
 				.Take(limit)
 				.ToList();
 		}
 
-		public IReadOnlyList<VisitedFolderItem> Search(string query, int limit = 15)
+		public IReadOnlyList<VisitedFolderItem> Search(string? query, int limit = 15)
 		{
 			if (string.IsNullOrWhiteSpace(query))
 				return GetTopFolders(limit);
 
+			EnsureDefaultFoldersSeeded();
 			query = query.Trim();
 
 			return _cache.Values

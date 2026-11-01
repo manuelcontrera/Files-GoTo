@@ -1,22 +1,18 @@
 // Copyright (c) Files Community
 // Licensed under the MIT License.
 
-using System.IO;
+using System.ComponentModel;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.DependencyInjection;
 using Files.App.Data.Commands;
 using Files.App.Data.Contexts;
-using Files.App.Dialogs;
-using Files.App.Services;
-using Microsoft.UI.Xaml;
 
 namespace Files.App.Actions
 {
 	[GeneratedRichCommand]
 	internal sealed partial class GoToFolderAction : ObservableObject, IAction
 	{
-		private readonly IVisitedFoldersService _visitedService;
 		private readonly IContentPageContext _context;
 
 		public string Label
@@ -39,33 +35,33 @@ namespace Files.App.Actions
 
 		public ActionCategory Category => ActionCategory.Navigation;
 
-		public RichGlyph Glyph => new("\uED43");
+		public RichGlyph Glyph => new("\uED43", themedIconStyle: "App.ThemedIcons.Folder");
 
-		// Atajo por defecto: Ctrl + G (Modificable en Ajustes > Acciones)
+		// Atajo por defecto: Ctrl + G
 		public HotKey HotKey => new(Keys.G, KeyModifiers.Ctrl);
 
-		public bool IsExecutable => true;
+		public bool IsExecutable => _context.ShellPage is not null;
 
 		public GoToFolderAction()
 		{
-			_visitedService = Ioc.Default.GetRequiredService<IVisitedFoldersService>();
 			_context = Ioc.Default.GetRequiredService<IContentPageContext>();
+			_context.PropertyChanged += Context_PropertyChanged;
 		}
 
-		public async Task ExecuteAsync(object? parameter = null)
+		public Task ExecuteAsync(object? parameter = null)
 		{
-			var dialog = new GoToFolderDialog(_visitedService)
+			if (_context.ShellPage?.ToolbarViewModel is { } toolbar)
 			{
-				XamlRoot = MainWindow.Instance.Content.XamlRoot
-			};
-
-			await dialog.ShowAsync();
-
-			if (!string.IsNullOrWhiteSpace(dialog.SelectedFolderPath) && Directory.Exists(dialog.SelectedFolderPath))
-			{
-				// Navegar en la pestaña / shell activo
-				_context.ShellPage?.NavigateToPath(dialog.SelectedFolderPath);
+				_ = toolbar.SwitchToGoToMode();
 			}
+
+			return Task.CompletedTask;
+		}
+
+		private void Context_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+		{
+			if (e.PropertyName is nameof(IContentPageContext.ShellPage))
+				OnPropertyChanged(nameof(IsExecutable));
 		}
 	}
 }

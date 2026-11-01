@@ -11,7 +11,7 @@ namespace Files.App.Services
 	{
 		void TrackFolder(string folderPath, string? folderName = null);
 		IReadOnlyList<VisitedFolderItem> GetTopFolders(int limit = 15);
-		IReadOnlyList<VisitedFolderItem> Search(string query, int limit = 15);
+		IReadOnlyList<VisitedFolderItem> Search(string? query, int limit = 15);
 		Task InitializeAsync();
 		Task SaveChangesAsync();
 	}

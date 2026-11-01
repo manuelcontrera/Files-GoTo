@@ -1,9 +1,9 @@
 name: Build Files (Go-To Folder)
 
-    on:
+on:
       workflow_dispatch:
 
-    env:
+env:
       SOLUTION_PATH: '${{ github.workspace }}\Files.slnx'
       APP_PROJECT_PATH: '${{ github.workspace }}\src\Files.App\Files.App.csproj'
       CONFIGURATION: 'Release'
@@ -11,7 +11,7 @@ name: Build Files (Go-To Folder)
       APPX_PACKAGE_DIR: '${{ github.workspace }}\artifacts\AppxPackages\'
       APPX_SELFSIGNED_CERT_PATH: '${{ github.workspace }}\.github\workflows\FilesApp_SelfSigned.pfx'
 
-    jobs:
+jobs:
       build-and-package:
         runs-on: windows-2025-vs2026
 

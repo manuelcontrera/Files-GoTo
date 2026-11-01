@@ -49,6 +49,7 @@ jobs:
           shell: pwsh
           run: |
             msbuild `
+              -warnaserror `
               -warnnotaserror:CS0612,CS0618,CS0672,IL2104 `
               $env:APP_PROJECT_PATH `
               -t:Build `

@@ -441,13 +441,13 @@
 								<TextBlock
 									FontSize="13"
 									FontWeight="SemiBold"
-									Text="{x:Bind FolderName, Mode=OneWay}"
+									Text="{x:Bind FolderName}"
 									TextTrimming="CharacterEllipsis" />
 								<TextBlock
 									FontSize="11"
 									Foreground="{ThemeResource TextFillColorSecondaryBrush}"
 									Style="{ThemeResource CaptionTextBlockStyle}"
-									Text="{x:Bind FolderPath, Mode=OneWay}"
+									Text="{x:Bind FolderPath}"
 									TextTrimming="CharacterEllipsis" />
 							</StackPanel>
 						</Grid>

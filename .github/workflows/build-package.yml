@@ -1,0 +1,72 @@
+name: Build Files (Go-To Folder)
+
+    on:
+      workflow_dispatch:
+
+    env:
+      SOLUTION_PATH: '${{ github.workspace }}\Files.slnx'
+      APP_PROJECT_PATH: '${{ github.workspace }}\src\Files.App\Files.App.csproj'
+      CONFIGURATION: 'Release'
+      ARCHITECTURE: 'x64'
+      APPX_PACKAGE_DIR: '${{ github.workspace }}\artifacts\AppxPackages\'
+      APPX_SELFSIGNED_CERT_PATH: '${{ github.workspace }}\.github\workflows\FilesApp_SelfSigned.pfx'
+
+    jobs:
+      build-and-package:
+        runs-on: windows-2025-vs2026
+
+        steps:
+        - name: Checkout repository
+          uses: actions/checkout@v4
+
+        - name: Setup MSBuild
+          uses: microsoft/setup-msbuild@v2
+
+        - name: Setup NuGet
+          uses: NuGet/setup-nuget@v2
+
+        - name: Setup .NET
+          uses: actions/setup-dotnet@v4
+          with:
+            global-json-file: global.json
+
+        - name: Restore dependencies
+          shell: pwsh
+          run: |
+            msbuild $env:SOLUTION_PATH `
+              -t:Restore `
+              -p:Platform=$env:ARCHITECTURE `
+              -p:Configuration=$env:CONFIGURATION `
+              -p:PublishReadyToRun=true `
+              -v:minimal
+
+        - name: Create self signed certificate
+          shell: pwsh
+          run: |
+            ./.github/scripts/Generate-SelfCertPfx.ps1 -Destination "$env:APPX_SELFSIGNED_CERT_PATH"
+
+        - name: Build & package Files (Sideload MSIX)
+          shell: pwsh
+          run: |
+            msbuild `
+              -warnnotaserror:CS0612,CS0618,CS0672,IL2104 `
+              $env:APP_PROJECT_PATH `
+              -t:Build `
+              -p:Configuration=$env:CONFIGURATION `
+              -p:Platform=$env:ARCHITECTURE `
+              -p:AppxBundlePlatforms=$env:ARCHITECTURE `
+              -p:AppxBundle=Always `
+              -p:GenerateAppxPackageOnBuild=true `
+              -p:UapAppxPackageBuildMode=SideloadOnly `
+              -p:AppxPackageDir=$env:APPX_PACKAGE_DIR `
+              -p:AppxPackageSigningEnabled=true `
+              -p:PackageCertificateKeyFile=$env:APPX_SELFSIGNED_CERT_PATH `
+              -p:PackageCertificatePassword="" `
+              -p:PackageCertificateThumbprint="" `
+              -v:minimal
+
+        - name: Upload Installer Package
+          uses: actions/upload-artifact@v4
+          with:
+            name: Files-GoToFolder-Release-x64
+            path: ${{ env.APPX_PACKAGE_DIR }}

@@ -63,7 +63,7 @@ namespace Files.App.Services
 			}
 		}
 
-		public void TrackFolder(string folderPath, string folderName)
+		public void TrackFolder(string folderPath, string? folderName = null)
 		{
 			if (string.IsNullOrWhiteSpace(folderPath) ||
 				folderPath.StartsWith("::{", StringComparison.Ordinal) ||

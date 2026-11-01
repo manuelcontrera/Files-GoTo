@@ -166,7 +166,7 @@ namespace Files.App.Views.Shells
 				if (currentFolder is not null && !string.IsNullOrEmpty(currentFolder.ItemPath))
 				{
 					var visitedService = Ioc.Default.GetRequiredService<IVisitedFoldersService>();
-					visitedService.TrackFolder(currentFolder.ItemPath, currentFolder.Name);
+					visitedService.TrackFolder(currentFolder.ItemPath, currentFolder.Name ?? string.Empty);
 				}
 			}
 		}

@@ -14,7 +14,7 @@ env:
   PACKAGE_MANIFEST_PATH: 'src\Files.App\Package.appxmanifest'
   CONFIGURATION: 'Release'
   PLATFORM: 'x64'
-  APPX_PACKAGE_DIR: '${{ github.workspace }}\artifacts\AppxPackages'
+  APPX_PACKAGE_DIR: '${{ github.workspace }}\artifacts\AppxPackages\'
   APPX_SELFSIGNED_CERT_PATH: '${{ github.workspace }}\FilesApp_Custom.pfx'
   CERT_PUBLISHER: 'CN=ManuelContreras'
 
@@ -117,4 +117,4 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: Files-Custom-Stable-x64
-        path: ${{ env.APPX_PACKAGE_DIR }}
+        path: ${{ github.workspace }}\artifacts

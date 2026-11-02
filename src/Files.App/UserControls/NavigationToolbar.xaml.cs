@@ -286,6 +286,32 @@ namespace Files.App.UserControls
 				ContentPageContext.ShellPage?.PaneHolder?.FocusActivePane();
 				return;
 			}
+
+			// Go-To Folder mode
+			else if (mode == OmnibarGoToMode)
+			{
+				var item = args.Item as VisitedFolderItem;
+				var targetPath = item?.FolderPath;
+
+				if (string.IsNullOrWhiteSpace(targetPath))
+				{
+					if (!string.IsNullOrWhiteSpace(args.Text) && SystemIO.Directory.Exists(args.Text))
+						targetPath = args.Text;
+					else
+						targetPath = viewModel.OmnibarGoToModeSuggestionItems.FirstOrDefault()?.FolderPath;
+				}
+
+				if (!string.IsNullOrWhiteSpace(targetPath) && SystemIO.Directory.Exists(targetPath))
+				{
+					ContentPageContext.ShellPage?.NavigateToPath(targetPath);
+				}
+
+				viewModel.OmnibarGoToModeText = string.Empty;
+				Omnibar.IsFocused = false;
+				Omnibar.CurrentSelectedMode = OmnibarPathMode;
+				ContentPageContext.ShellPage?.PaneHolder?.FocusActivePane();
+				return;
+			}
 		}
 
 		private async void Omnibar_TextChanged(Omnibar sender, OmnibarTextChangedEventArgs args)
@@ -307,6 +333,10 @@ namespace Files.App.UserControls
 			else if (Omnibar.CurrentSelectedMode == OmnibarSearchMode)
 			{
 				await DispatcherQueue.EnqueueOrInvokeAsync(viewModel.PopulateOmnibarSuggestionsForSearchMode);
+			}
+			else if (Omnibar.CurrentSelectedMode == OmnibarGoToMode)
+			{
+				await DispatcherQueue.EnqueueOrInvokeAsync(viewModel.PopulateOmnibarSuggestionsForGoToMode);
 			}
 		}
 
@@ -459,6 +489,12 @@ namespace Files.App.UserControls
 
 				await DispatcherQueue.EnqueueOrInvokeAsync(viewModel.PopulateOmnibarSuggestionsForSearchMode);
 			}
+			else if (e.NewMode == OmnibarGoToMode)
+			{
+				viewModel.OmnibarGoToModeText = pendingText ?? string.Empty;
+
+				await DispatcherQueue.EnqueueOrInvokeAsync(viewModel.PopulateOmnibarSuggestionsForGoToMode);
+			}
 		}
 
 		/// <summary>
@@ -479,6 +515,10 @@ namespace Files.App.UserControls
 					viewModel.PathText = TakePendingOmnibarText(OmnibarPathMode) ?? TakePendingPathModeInput(viewModel) ?? GetDefaultPathText();
 
 					await DispatcherQueue.EnqueueOrInvokeAsync(viewModel.PopulateOmnibarSuggestionsForPathMode);
+				}
+				else if (Omnibar.CurrentSelectedMode == OmnibarGoToMode)
+				{
+					await DispatcherQueue.EnqueueOrInvokeAsync(viewModel.PopulateOmnibarSuggestionsForGoToMode);
 				}
 			}
 			else
@@ -563,6 +603,8 @@ namespace Files.App.UserControls
 					OmnibarCommandPaletteMode.Focus(FocusState.Keyboard);
 				else if (currentSelectedMode == OmnibarSearchMode)
 					OmnibarSearchMode.Focus(FocusState.Keyboard);
+				else if (currentSelectedMode == OmnibarGoToMode)
+					OmnibarGoToMode.Focus(FocusState.Keyboard);
 			}
 		}
 

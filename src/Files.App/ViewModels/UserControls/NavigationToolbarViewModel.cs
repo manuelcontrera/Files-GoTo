@@ -28,6 +28,7 @@ namespace Files.App.ViewModels.UserControls
 		public const string OmnibarPathModeName = "OmnibarPathMode";
 		public const string OmnibarPaletteModeName = "OmnibarCommandPaletteMode";
 		public const string OmnibarSearchModeName = "OmnibarSearchMode";
+		public const string OmnibarGoToModeName = "OmnibarGoToMode";
 
 		// Dependency injections
 
@@ -75,6 +76,8 @@ namespace Files.App.ViewModels.UserControls
 		internal ObservableCollection<NavigationBarSuggestionItem> OmnibarCommandPaletteModeSuggestionItems { get; } = [];
 
 		internal ObservableCollection<SuggestionModel> OmnibarSearchModeSuggestionItems { get; } = [];
+
+		internal ObservableCollection<VisitedFolderItem> OmnibarGoToModeSuggestionItems { get; } = [];
 
 		public bool IsSingleItemOverride { get; set; }
 
@@ -225,6 +228,13 @@ namespace Files.App.ViewModels.UserControls
 
 		private string? _OmnibarCommandPaletteModeText;
 		public string? OmnibarCommandPaletteModeText { get => _OmnibarCommandPaletteModeText; set => SetProperty(ref _OmnibarCommandPaletteModeText, value); }
+
+		private string? _OmnibarGoToModeText = string.Empty;
+		public string? OmnibarGoToModeText
+		{
+			get => _OmnibarGoToModeText;
+			set => SetProperty(ref _OmnibarGoToModeText, value);
+		}
 
 		private string? _OmnibarSearchModeText;
 		public string? OmnibarSearchModeText
@@ -812,6 +822,18 @@ namespace Files.App.ViewModels.UserControls
 			var input = _pendingPathModeInput;
 			_pendingPathModeInput = null;
 			return input;
+		}
+
+		public async Task SwitchToGoToMode()
+		{
+			var omnibar = AddressToolbar?.FindDescendant("Omnibar") as Omnibar;
+			if (omnibar is not null && omnibar.IsFocused)
+				await Task.Delay(100);
+
+			OmnibarCurrentSelectedModeName = OmnibarGoToModeName;
+			omnibar?.Focus(FocusState.Programmatic);
+			if (omnibar is not null)
+				omnibar.IsFocused = true;
 		}
 
 		public void UpdateAdditionalActions()
@@ -1458,6 +1480,28 @@ namespace Files.App.ViewModels.UserControls
 				if (OmnibarSearchModeSuggestionItems.Count >= MaxSuggestionsCount)
 					break;
 			}
+		}
+
+		public Task PopulateOmnibarSuggestionsForGoToMode()
+		{
+			if (_isDisposed || ContentPageContext.ShellPage is null)
+				return Task.CompletedTask;
+
+			var visitedService = Ioc.Default.GetRequiredService<IVisitedFoldersService>();
+			var results = visitedService.Search(OmnibarGoToModeText, 15);
+
+			for (int index = 0; index < results.Count; index++)
+			{
+				if (index < OmnibarGoToModeSuggestionItems.Count)
+					OmnibarGoToModeSuggestionItems[index] = results[index];
+				else
+					OmnibarGoToModeSuggestionItems.Add(results[index]);
+			}
+
+			while (OmnibarGoToModeSuggestionItems.Count > results.Count)
+				OmnibarGoToModeSuggestionItems.RemoveAt(OmnibarGoToModeSuggestionItems.Count - 1);
+
+			return Task.CompletedTask;
 		}
 
 		private void FolderSettings_PropertyChanged(object? sender, PropertyChangedEventArgs e)

@@ -4805,6 +4805,7 @@
   </data>
   <data name="GoToFolderAliasDescription" xml:space="preserve">
     <value>Go to a folder alias in the Omnibar</value>
+  </data>
   <data name="Command_GoToFolder_Label" xml:space="preserve">
     <value>Go to folder...</value>
   </data>

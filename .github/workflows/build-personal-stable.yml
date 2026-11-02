@@ -1,0 +1,120 @@
+name: Build Personal Stable (Files)
+
+on:
+  push:
+    branches:
+      - custom
+  workflow_dispatch:
+
+env:
+  WORKING_DIR: '${{ github.workspace }}'
+  SOLUTION_NAME: 'Files.slnx'
+  APP_PROJECT_PATH: 'src\Files.App\Files.App.csproj'
+  LAUNCHER_PROJECT_PATH: 'src\Files.App.Launcher\Files.App.Launcher.vcxproj'
+  PACKAGE_MANIFEST_PATH: 'src\Files.App\Package.appxmanifest'
+  CONFIGURATION: 'Release'
+  PLATFORM: 'x64'
+  APPX_PACKAGE_DIR: '${{ github.workspace }}\artifacts\AppxPackages'
+  APPX_SELFSIGNED_CERT_PATH: '${{ github.workspace }}\FilesApp_Custom.pfx'
+  CERT_PUBLISHER: 'CN=ManuelContreras'
+
+jobs:
+  build:
+    runs-on: windows-2025-vs2026
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup MSBuild
+      uses: microsoft/setup-msbuild@v2
+
+    - name: Setup NuGet
+      uses: NuGet/setup-nuget@v2
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        global-json-file: global.json
+
+    - name: Configure Manifest for Stable (Remove Dev)
+      shell: pwsh
+      run: |
+        . './.github/scripts/Configure-AppxManifest.ps1' `
+          -Branch "SideloadStable" `
+          -PackageManifestPath "$env:PACKAGE_MANIFEST_PATH" `
+          -Publisher "$env:CERT_PUBLISHER" `
+          -WorkingDir "$env:WORKING_DIR"
+
+    - name: Restore NuGet packages for solution
+      shell: pwsh
+      run: |
+        msbuild $env:SOLUTION_NAME `
+          -t:Restore `
+          -p:Platform=$env:PLATFORM `
+          -p:Configuration=$env:CONFIGURATION `
+          -p:PublishReadyToRun=true `
+          -v:quiet
+
+    - name: Restore & Build Launcher Project (Default File Manager helper)
+      shell: pwsh
+      run: |
+        nuget restore "$env:LAUNCHER_PROJECT_PATH" -SolutionDirectory "$env:WORKING_DIR" -Verbosity quiet
+        msbuild "$env:LAUNCHER_PROJECT_PATH" `
+          -t:Build `
+          -p:Platform=$env:PLATFORM `
+          -p:Configuration=$env:CONFIGURATION `
+          -v:quiet
+
+    - name: Generate Personal Self-Signed Certificate
+      shell: pwsh
+      run: |
+        $cert = New-SelfSignedCertificate `
+          -Type Custom `
+          -Subject $env:CERT_PUBLISHER `
+          -KeyUsage DigitalSignature `
+          -FriendlyName "Files Custom Release" `
+          -CertStoreLocation "Cert:\CurrentUser\My" `
+          -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.3", "2.5.29.19={text}")
+
+        $pfxBytes = $cert.Export([System.Security.Cryptography.X509Certificates.X509ContentType]::Pkcs12)
+        [System.IO.File]::WriteAllBytes("$env:APPX_SELFSIGNED_CERT_PATH", $pfxBytes)
+
+        if (-not (Test-Path "$env:APPX_PACKAGE_DIR")) {
+          New-Item -ItemType Directory -Path "$env:APPX_PACKAGE_DIR" -Force | Out-Null
+        }
+        $cerBytes = $cert.Export([System.Security.Cryptography.X509Certificates.X509ContentType]::Cert)
+        [System.IO.File]::WriteAllBytes("$env:APPX_PACKAGE_DIR\Files_Custom.cer", $cerBytes)
+
+        # Sign launcher exe if signtool available
+        $signTool = Get-ChildItem -Path "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Filter "signtool.exe" -Recurse -ErrorAction SilentlyContinue |
+          Where-Object { $_.FullName -match '\\x64\\signtool\.exe$' } | Select-Object -First 1
+        $launcherExe = "$env:WORKING_DIR\src\Files.App\Assets\FilesOpenDialog\Files.App.Launcher.exe"
+        if ($signTool -and (Test-Path $launcherExe)) {
+          Write-Host "Signing Files.App.Launcher.exe..."
+          & $signTool.FullName sign /fd SHA256 /f "$env:APPX_SELFSIGNED_CERT_PATH" $launcherExe
+        }
+
+    - name: Build & Package Files (Stable MSIXBundle)
+      shell: pwsh
+      run: |
+        msbuild "$env:APP_PROJECT_PATH" `
+          -t:Build `
+          -p:Configuration=$env:CONFIGURATION `
+          -p:Platform=$env:PLATFORM `
+          -p:AppxBundlePlatforms=$env:PLATFORM `
+          -p:AppxBundle=Always `
+          -p:GenerateAppxPackageOnBuild=true `
+          -p:UapAppxPackageBuildMode=SideloadOnly `
+          -p:AppxPackageDir="$env:APPX_PACKAGE_DIR" `
+          -p:AppxPackageSigningEnabled=true `
+          -p:PackageCertificateKeyFile="$env:APPX_SELFSIGNED_CERT_PATH" `
+          -p:PackageCertificatePassword="" `
+          -p:PackageCertificateThumbprint="" `
+          -v:minimal
+
+    - name: Upload Package Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: Files-Custom-Stable-x64
+        path: ${{ env.APPX_PACKAGE_DIR }}

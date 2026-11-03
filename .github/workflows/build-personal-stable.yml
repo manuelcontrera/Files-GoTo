@@ -44,7 +44,8 @@ jobs:
           -Branch "SideloadStable" `
           -PackageManifestPath "$env:PACKAGE_MANIFEST_PATH" `
           -Publisher "$env:CERT_PUBLISHER" `
-          -WorkingDir "$env:WORKING_DIR"
+          -WorkingDir "$env:WORKING_DIR" `
+          -RunNumber "${{ github.run_number }}"
 
     - name: Restore NuGet packages for solution
       shell: pwsh
@@ -66,25 +67,43 @@ jobs:
           -p:Configuration=$env:CONFIGURATION `
           -v:quiet
 
-    - name: Generate Personal Self-Signed Certificate
+    - name: Setup Signing Certificate
       shell: pwsh
+      env:
+        CERT_PFX_SECRET: ${{ secrets.APPX_CERT_BASE64 }}
+        CERT_PASSWORD_SECRET: ${{ secrets.APPX_CERT_PASSWORD }}
       run: |
-        $cert = New-SelfSignedCertificate `
-          -Type Custom `
-          -Subject $env:CERT_PUBLISHER `
-          -KeyUsage DigitalSignature `
-          -FriendlyName "Files Custom Release" `
-          -CertStoreLocation "Cert:\CurrentUser\My" `
-          -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.3", "2.5.29.19={text}")
-
-        $pfxBytes = $cert.Export([System.Security.Cryptography.X509Certificates.X509ContentType]::Pkcs12)
-        [System.IO.File]::WriteAllBytes("$env:APPX_SELFSIGNED_CERT_PATH", $pfxBytes)
-
         if (-not (Test-Path "$env:APPX_PACKAGE_DIR")) {
           New-Item -ItemType Directory -Path "$env:APPX_PACKAGE_DIR" -Force | Out-Null
         }
-        $cerBytes = $cert.Export([System.Security.Cryptography.X509Certificates.X509ContentType]::Cert)
-        [System.IO.File]::WriteAllBytes("$env:APPX_PACKAGE_DIR\Files_Custom.cer", $cerBytes)
+
+        if ($env:CERT_PFX_SECRET) {
+          Write-Host "Using persistent certificate from repository secret..."
+          $pfxBytes = [Convert]::FromBase64String($env:CERT_PFX_SECRET)
+          [System.IO.File]::WriteAllBytes("$env:APPX_SELFSIGNED_CERT_PATH", $pfxBytes)
+
+          $cert = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new(
+            "$env:APPX_SELFSIGNED_CERT_PATH",
+            $env:CERT_PASSWORD_SECRET,
+            [System.Security.Cryptography.X509Certificates.X509KeyStorageFlags]::Exportable
+          )
+          $cerBytes = $cert.Export([System.Security.Cryptography.X509Certificates.X509ContentType]::Cert)
+          [System.IO.File]::WriteAllBytes("$env:APPX_PACKAGE_DIR\Files_Custom.cer", $cerBytes)
+        } else {
+          Write-Host "Generating self-signed certificate on runner..."
+          $cert = New-SelfSignedCertificate `
+            -Type Custom `
+            -Subject $env:CERT_PUBLISHER `
+            -KeyUsage DigitalSignature `
+            -FriendlyName "Files Custom Release" `
+            -CertStoreLocation "Cert:\CurrentUser\My" `
+            -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.3", "2.5.29.19={text}")
+
+          $pfxBytes = $cert.Export([System.Security.Cryptography.X509Certificates.X509ContentType]::Pkcs12)
+          [System.IO.File]::WriteAllBytes("$env:APPX_SELFSIGNED_CERT_PATH", $pfxBytes)
+          $cerBytes = $cert.Export([System.Security.Cryptography.X509Certificates.X509ContentType]::Cert)
+          [System.IO.File]::WriteAllBytes("$env:APPX_PACKAGE_DIR\Files_Custom.cer", $cerBytes)
+        }
 
         # Sign launcher exe if signtool available
         $signTool = Get-ChildItem -Path "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Filter "signtool.exe" -Recurse -ErrorAction SilentlyContinue |

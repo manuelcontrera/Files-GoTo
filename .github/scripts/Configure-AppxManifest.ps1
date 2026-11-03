@@ -6,6 +6,8 @@ param(
     [string]$PackageManifestPath = "",
     [string]$Publisher = "",
     [string]$WorkingDir = "",
+    [string]$RunNumber = "",
+    [string]$AppVersion = "",
     [string]$SecretBingMapsKey = "",
     [string]$SecretSentry = "",
     [string]$SecretGitHubOAuthClientId = "",
@@ -27,6 +29,19 @@ $ea = $xmlDoc.SelectSingleNode("/pkg:Package/pkg:Applications/pkg:Application/pk
 
 # Update the publisher
 $xmlDoc.Package.Identity.Publisher = $Publisher
+
+# Update version
+if ($RunNumber)
+{
+    $currentVer = [version]$xmlDoc.Package.Identity.Version
+    $xmlDoc.Package.Identity.Version = "$($currentVer.Major).$($currentVer.Minor).$($currentVer.Build).$RunNumber"
+    Write-Host "Configured Package Version: $($xmlDoc.Package.Identity.Version)"
+}
+elseif ($AppVersion)
+{
+    $xmlDoc.Package.Identity.Version = $AppVersion
+    Write-Host "Configured Package Version: $($xmlDoc.Package.Identity.Version)"
+}
 
 if ($Branch -eq "SideloadPreview")
 {

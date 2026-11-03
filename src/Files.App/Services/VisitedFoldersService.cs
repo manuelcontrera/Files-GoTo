@@ -158,7 +158,9 @@ namespace Files.App.Services
 			return _cache.Values
 				.Where(f => f.FolderName.Contains(query, StringComparison.OrdinalIgnoreCase) ||
 							f.FolderPath.Contains(query, StringComparison.OrdinalIgnoreCase))
-				.OrderByDescending(f => f.FolderName.StartsWith(query, StringComparison.OrdinalIgnoreCase))
+				.OrderByDescending(f => f.FolderName.Equals(query, StringComparison.OrdinalIgnoreCase))
+				.ThenByDescending(f => f.FolderName.StartsWith(query, StringComparison.OrdinalIgnoreCase))
+				.ThenByDescending(f => f.FolderName.Contains(query, StringComparison.OrdinalIgnoreCase))
 				.ThenByDescending(f => f.FrecencyScore)
 				.Take(limit)
 				.ToList();

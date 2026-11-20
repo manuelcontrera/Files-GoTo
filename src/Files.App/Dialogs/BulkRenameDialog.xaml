@@ -6,54 +6,352 @@
 	xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
 	xmlns:helpers="using:Files.App.Helpers"
 	xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+	xmlns:vm="using:Files.App.ViewModels.Dialogs"
 	Title="{helpers:ResourceString Name=BulkRename}"
+	ActualThemeChanged="BulkRenameDialog_ActualThemeChanged"
+	Closed="BulkRenameDialog_Closed"
 	DefaultButton="Primary"
 	HighContrastAdjustment="None"
-	IsPrimaryButtonEnabled="{x:Bind ViewModel.IsNameValid, Mode=OneWay}"
-	PrimaryButtonCommand="{x:Bind ViewModel.CommitRenameCommand, Mode=OneWay}"
-	PrimaryButtonText="{helpers:ResourceString Name=Rename}"
+	IsPrimaryButtonEnabled="{x:Bind ViewModel.CanCommit, Mode=OneWay}"
+	Opened="BulkRenameDialog_Opened"
+	PrimaryButtonClick="BulkRenameDialog_PrimaryButtonClick"
+	PrimaryButtonText="{x:Bind ViewModel.PrimaryButtonLabel, Mode=OneWay}"
 	RequestedTheme="{x:Bind RootAppElement.RequestedTheme, Mode=OneWay}"
 	SecondaryButtonText="{helpers:ResourceString Name=Cancel}"
 	Style="{StaticResource DefaultContentDialogStyle}"
 	mc:Ignorable="d">
 
-	<StackPanel Width="440" Spacing="4">
+	<ContentDialog.Resources>
+		<x:Double x:Key="ContentDialogMaxWidth">820</x:Double>
+		<SolidColorBrush x:Key="MultiCursorCaretBrush" Color="#FF0078D4" />
+	</ContentDialog.Resources>
 
-		<!--  Name  -->
-		<Grid
-			Padding="12"
-			Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-			BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-			BorderThickness="1"
-			ColumnSpacing="8"
-			CornerRadius="4">
+	<Grid Width="680" RowSpacing="10">
+		<Grid.RowDefinitions>
+			<RowDefinition Height="Auto" />
+			<RowDefinition Height="*" />
+			<RowDefinition Height="Auto" />
+			<RowDefinition Height="Auto" />
+		</Grid.RowDefinitions>
+
+		<!--  Toolbar: status summary & quick actions  -->
+		<Grid Grid.Row="0" ColumnSpacing="8">
 			<Grid.ColumnDefinitions>
 				<ColumnDefinition Width="*" />
 				<ColumnDefinition Width="Auto" />
 			</Grid.ColumnDefinitions>
 
-			<TextBlock
+			<StackPanel
 				Grid.Column="0"
 				VerticalAlignment="Center"
-				Text="{helpers:ResourceString Name=Name}" />
+				Orientation="Horizontal"
+				Spacing="8">
 
-			<TextBox
-				x:Name="FileNameBox"
+				<Border
+					Padding="8,4"
+					Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+					CornerRadius="4">
+					<TextBlock
+						VerticalAlignment="Center"
+						Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+						Style="{StaticResource CaptionTextBlockStyle}"
+						Text="{x:Bind ViewModel.StatusSummaryText, Mode=OneWay}" />
+				</Border>
+
+				<Button
+					Height="26"
+					Padding="8,2"
+					Click="RestoreAllCursorsButton_Click"
+					Visibility="{x:Bind ViewModel.SingleRowModeVisibility, Mode=OneWay}">
+					<TextBlock
+						Style="{StaticResource CaptionTextBlockStyle}"
+						Text="{x:Bind ViewModel.SingleRowPillText, Mode=OneTime}" />
+				</Button>
+
+			</StackPanel>
+
+			<StackPanel
 				Grid.Column="1"
-				Width="260"
-				PlaceholderText="{helpers:ResourceString Name=EnterName}"
-				Text="{x:Bind ViewModel.FileName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}">
-				<TextBox.Resources>
-					<TeachingTip
-						x:Name="InvalidNameWarning"
-						Title="{helpers:ResourceString Name=InvalidFilename/Text}"
-						IsOpen="{x:Bind ViewModel.ShowNameWarning, Mode=OneWay}"
-						PreferredPlacement="Bottom"
-						Target="{x:Bind FileNameBox}" />
-				</TextBox.Resources>
-			</TextBox>
+				Orientation="Horizontal"
+				Spacing="6">
 
+				<ToggleButton
+					x:Name="EditExtensionsToggle"
+					Height="30"
+					Padding="10,4"
+					Click="EditExtensionsToggle_Click"
+					IsChecked="{x:Bind ViewModel.EditExtensions, Mode=OneWay}"
+					ToolTipService.ToolTip="{x:Bind ViewModel.EditExtensionsToolTip, Mode=OneTime}">
+					<TextBlock
+						FontFamily="Cascadia Mono, Consolas, Courier New"
+						FontSize="12"
+						Text="{x:Bind ViewModel.EditExtensionsLabel, Mode=OneTime}" />
+				</ToggleButton>
+
+				<Button
+					x:Name="InsertCounterButton"
+					Height="30"
+					Padding="10,4"
+					Click="InsertCounterButton_Click"
+					ToolTipService.ToolTip="{x:Bind ViewModel.InsertCounterToolTip, Mode=OneTime}">
+					<TextBlock
+						FontFamily="Cascadia Mono, Consolas, Courier New"
+						FontSize="12"
+						FontWeight="SemiBold"
+						Text="{x:Bind ViewModel.InsertCounterLabel, Mode=OneTime}" />
+				</Button>
+
+				<Button
+					x:Name="ResetButton"
+					Height="30"
+					Padding="10,4"
+					Click="ResetButton_Click"
+					IsEnabled="{x:Bind ViewModel.CanReset, Mode=OneWay}"
+					ToolTipService.ToolTip="{x:Bind ViewModel.ResetToolTip, Mode=OneTime}">
+					<StackPanel Orientation="Horizontal" Spacing="6">
+						<FontIcon FontSize="12" Glyph="&#xE7A7;" />
+						<TextBlock FontSize="12" Text="{x:Bind ViewModel.ResetLabel, Mode=OneTime}" />
+					</StackPanel>
+				</Button>
+
+			</StackPanel>
 		</Grid>
 
-	</StackPanel>
+		<!--  Multi-cursor live filename editor  -->
+		<ContentControl
+			x:Name="EditorFocusHost"
+			Grid.Row="1"
+			HorizontalContentAlignment="Stretch"
+			VerticalContentAlignment="Stretch"
+			CharacterReceived="EditorFocusHost_CharacterReceived"
+			GotFocus="EditorFocusHost_GotFocus"
+			IsTabStop="True"
+			LostFocus="EditorFocusHost_LostFocus"
+			PreviewKeyDown="EditorFocusHost_PreviewKeyDown"
+			TabIndex="0"
+			UseSystemFocusVisuals="False">
+
+			<Border
+				x:Name="EditorSurfaceBorder"
+				Background="{ThemeResource LayerFillColorDefaultBrush}"
+				BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+				BorderThickness="1"
+				CornerRadius="6"
+				PointerPressed="EditorSurfaceBorder_PointerPressed">
+
+				<ScrollViewer
+					x:Name="ItemsScrollViewer"
+					MinHeight="110"
+					MaxHeight="380"
+					Padding="4"
+					HorizontalScrollBarVisibility="Auto"
+					IsTabStop="False"
+					VerticalScrollBarVisibility="Auto">
+
+					<ItemsRepeater x:Name="RenameItemsRepeater" ItemsSource="{x:Bind ViewModel.Items, Mode=OneWay}">
+						<ItemsRepeater.Layout>
+							<StackLayout Orientation="Vertical" Spacing="2" />
+						</ItemsRepeater.Layout>
+						<ItemsRepeater.ItemTemplate>
+							<DataTemplate x:DataType="vm:BulkRenameItemViewModel">
+								<Grid
+									MinHeight="32"
+									Padding="8,4"
+									Background="Transparent"
+									CornerRadius="4"
+									DoubleTapped="Row_DoubleTapped"
+									Opacity="{x:Bind RowOpacity, Mode=OneWay}"
+									PointerCaptureLost="Row_PointerCaptureLost"
+									PointerEntered="Row_PointerEntered"
+									PointerExited="Row_PointerExited"
+									PointerMoved="Row_PointerMoved"
+									PointerPressed="Row_PointerPressed"
+									PointerReleased="Row_PointerReleased"
+									ToolTipService.ToolTip="{x:Bind RowToolTip, Mode=OneWay}">
+									<Grid.ColumnDefinitions>
+										<ColumnDefinition Width="28" />
+										<ColumnDefinition Width="22" />
+										<ColumnDefinition Width="*" />
+										<ColumnDefinition Width="20" />
+									</Grid.ColumnDefinitions>
+
+									<!--  Row number  -->
+									<TextBlock
+										Grid.Column="0"
+										Margin="0,0,8,0"
+										HorizontalAlignment="Right"
+										VerticalAlignment="Center"
+										FontFamily="Cascadia Mono, Consolas, Courier New"
+										FontSize="11"
+										Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+										IsHitTestVisible="False"
+										Text="{x:Bind RowNumberText, Mode=OneTime}" />
+
+									<!--  File or folder icon  -->
+									<Grid
+										Grid.Column="1"
+										Width="16"
+										Height="16"
+										HorizontalAlignment="Center"
+										VerticalAlignment="Center"
+										IsHitTestVisible="False">
+										<Image
+											Width="16"
+											Height="16"
+											Source="{x:Bind FileImage, Mode=OneTime}"
+											Visibility="{x:Bind ImageVisibility, Mode=OneTime}" />
+										<FontIcon
+											FontSize="14"
+											Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+											Glyph="{x:Bind FallbackGlyph, Mode=OneTime}"
+											Visibility="{x:Bind FallbackGlyphVisibility, Mode=OneTime}" />
+									</Grid>
+
+									<!--  Editable filename with live multi-cursor & selection  -->
+									<Grid
+										x:Name="TextTrackHost"
+										Grid.Column="2"
+										Padding="6,2"
+										VerticalAlignment="Center"
+										Background="Transparent">
+										<StackPanel
+											VerticalAlignment="Center"
+											IsHitTestVisible="False"
+											Orientation="Horizontal">
+
+											<TextBlock
+												VerticalAlignment="Center"
+												FontFamily="Cascadia Mono, Consolas, Courier New"
+												FontSize="13.5"
+												IsTextSelectionEnabled="False"
+												Text="{x:Bind BeforeSelectionText, Mode=OneWay}"
+												TextWrapping="NoWrap" />
+
+											<Border
+												Width="2"
+												Height="18"
+												Margin="-1,0,-1,0"
+												VerticalAlignment="Center"
+												Background="{StaticResource MultiCursorCaretBrush}"
+												CornerRadius="1"
+												Visibility="{x:Bind CaretStartVisibility, Mode=OneWay}" />
+
+											<Border
+												Padding="0,1"
+												VerticalAlignment="Center"
+												Background="{ThemeResource AccentFillColorDefaultBrush}"
+												CornerRadius="2"
+												Visibility="{x:Bind SelectionVisibility, Mode=OneWay}">
+												<TextBlock
+													VerticalAlignment="Center"
+													FontFamily="Cascadia Mono, Consolas, Courier New"
+													FontSize="13.5"
+													Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}"
+													IsTextSelectionEnabled="False"
+													Text="{x:Bind SelectedText, Mode=OneWay}"
+													TextWrapping="NoWrap" />
+											</Border>
+
+											<Border
+												Width="2"
+												Height="18"
+												Margin="-1,0,-1,0"
+												VerticalAlignment="Center"
+												Background="{StaticResource MultiCursorCaretBrush}"
+												CornerRadius="1"
+												Visibility="{x:Bind CaretEndVisibility, Mode=OneWay}" />
+
+											<TextBlock
+												VerticalAlignment="Center"
+												FontFamily="Cascadia Mono, Consolas, Courier New"
+												FontSize="13.5"
+												IsTextSelectionEnabled="False"
+												Text="{x:Bind AfterSelectionText, Mode=OneWay}"
+												TextWrapping="NoWrap" />
+
+											<TextBlock
+												VerticalAlignment="Center"
+												FontFamily="Cascadia Mono, Consolas, Courier New"
+												FontSize="13.5"
+												Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+												IsTextSelectionEnabled="False"
+												Opacity="0.65"
+												Text="{x:Bind SuffixExtension, Mode=OneWay}"
+												TextWrapping="NoWrap"
+												Visibility="{x:Bind SuffixVisibility, Mode=OneWay}" />
+
+										</StackPanel>
+									</Grid>
+
+									<!--  Row status: error or modified indicator  -->
+									<Grid
+										Grid.Column="3"
+										HorizontalAlignment="Center"
+										VerticalAlignment="Center"
+										IsHitTestVisible="False">
+										<FontIcon
+											FontSize="13"
+											Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+											Glyph="&#xEA39;"
+											Visibility="{x:Bind ErrorVisibility, Mode=OneWay}" />
+										<Ellipse
+											Width="6"
+											Height="6"
+											Fill="{ThemeResource AccentFillColorDefaultBrush}"
+											Visibility="{x:Bind ModifiedIndicatorVisibility, Mode=OneWay}" />
+									</Grid>
+
+								</Grid>
+							</DataTemplate>
+						</ItemsRepeater.ItemTemplate>
+					</ItemsRepeater>
+
+				</ScrollViewer>
+			</Border>
+		</ContentControl>
+
+		<!--  Validation / illegal character banner  -->
+		<Border
+			x:Name="ValidationBanner"
+			Grid.Row="2"
+			Padding="10,7"
+			Background="{ThemeResource SystemFillColorCriticalBackgroundBrush}"
+			CornerRadius="4"
+			Visibility="{x:Bind ViewModel.ValidationBannerVisibility, Mode=OneWay}">
+			<StackPanel Orientation="Horizontal" Spacing="8">
+				<FontIcon
+					VerticalAlignment="Center"
+					FontSize="14"
+					Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+					Glyph="&#xEA39;" />
+				<TextBlock
+					VerticalAlignment="Center"
+					Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+					Style="{StaticResource CaptionTextBlockStyle}"
+					Text="{x:Bind ViewModel.ValidationBannerMessage, Mode=OneWay}"
+					TextWrapping="Wrap" />
+			</StackPanel>
+		</Border>
+
+		<!--  Keyboard shortcuts reference  -->
+		<TextBlock
+			Grid.Row="3"
+			Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+			Style="{StaticResource CaptionTextBlockStyle}"
+			Text="{x:Bind ViewModel.ShortcutsHintText, Mode=OneTime}"
+			TextWrapping="Wrap" />
+
+		<!--  Theme-reactive brush probes (ensures Light/Dark/High-Contrast brush resolution)  -->
+		<Border
+			x:Name="AccentBrushProbe"
+			Background="{ThemeResource AccentTextFillColorPrimaryBrush}"
+			BorderBrush="{ThemeResource AccentControlElevationBorderBrush}"
+			Visibility="Collapsed" />
+		<Border
+			x:Name="SurfaceBrushProbe"
+			Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+			BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+			Visibility="Collapsed" />
+
+	</Grid>
 </ContentDialog>

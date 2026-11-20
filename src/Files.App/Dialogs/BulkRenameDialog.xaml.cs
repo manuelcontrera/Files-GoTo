@@ -2,7 +2,6 @@
 // Licensed under the MIT License.
 
 using Microsoft.UI;
-using Microsoft.UI.Dispatching;
 using Microsoft.UI.Input;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -14,6 +13,7 @@ using Windows.System;
 using Windows.UI;
 using Windows.UI.Core;
 using WinRT;
+using DispatcherQueueTimer = Microsoft.UI.Dispatching.DispatcherQueueTimer;
 
 namespace Files.App.Dialogs
 {
